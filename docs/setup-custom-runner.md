@@ -9,10 +9,10 @@ You will then need to set up a workflow to run only on that runner.
 Finally, you will need to disconnect the runner from your repo for the end of the lab.
 
 ```
-GitHub.com ------------------------------> Custom Runner (e.g. on AWS)
-                                                    ^
-                                                    |
-Code Repository -------------------------------------
+GitHub.com -----------------------> Custom Runner (e.g. on AWS)
+                                             ^
+                                             |
+Code Repository ------------------------------
 ```
 
 ## Solution
