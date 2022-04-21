@@ -2,6 +2,16 @@
 
 We build a workflow in project [github-actions-deep-dive-lesson](https://github.com/davidainslie/github-actions-deep-dive-lesson).
 
+## Terraform
+
+Even though we describe and apply the steps manually, there are `Terraform` scripts to automate the process.
+However, we will always have to manually add `secrets` to GHA. In our case we need to set:
+- AWS_ACCOUNT_ID
+- AWS_ACCESS_KEY_ID
+- AWS_SECRET_ACCESS_KEY
+
+## Workflow
+
 The workflow is:
 1. Check out the code to the Runner
 2. Configure Python on Runner
@@ -306,3 +316,13 @@ Once deployed, we can test the function with a `test event` such as:
   "input": "Hello"
 }
 ```
+
+## Testing Job
+
+Steps are:
+- Configure the AWS CLI
+- Create a `non-prod` Lamdba function
+- Insert placeholders for tests
+- Destroy the `non-prod` Lambda function
+
+Need this job (named `test`) to run after the `upload` job, to be able to use (and test against) the latest artifact.
