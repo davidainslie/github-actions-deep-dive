@@ -2,6 +2,9 @@
 
 We build a workflow in project [github-actions-deep-dive-lesson](https://github.com/davidainslie/github-actions-deep-dive-lesson).
 
+The following goes through the process of building [github-actions-deep-dive-lesson](https://github.com/davidainslie/github-actions-deep-dive-lesson).
+However, there is also a [second lesson](https://github.com/davidainslie/github-actions-deep-dive-lesson-2).
+
 ## Terraform
 
 Even though we describe and apply the steps manually, there are `Terraform` scripts to automate the process.
@@ -326,3 +329,144 @@ Steps are:
 - Destroy the `non-prod` Lambda function
 
 Need this job (named `test`) to run after the `upload` job, to be able to use (and test against) the latest artifact.
+
+## Finished Product
+
+```yaml
+name: Deploy my Lambda Function
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  BUCKET: my-bucket-for-workflow-demo-1
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Install linting libraries
+        run: |
+          cd function
+          pip install flake8
+
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=180 --statistics
+
+  build:
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Install libraries
+        run: |
+          cd function
+          python -m pip install --upgrade pip
+          if [-f requirments.txt]; then
+            pip install -r requirements.txt -t .;
+          fi
+
+      - name: Create zip bundle
+        run: |
+          cd function
+          zip -r ../${{github.sha}}.zip .
+
+      - name: Archive artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: zipped-bundle
+          path: ${{github.sha}}.zip
+
+  upload:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: zipped-bundle
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{secrets.AWS_ACCESS_KEY_ID}}
+          aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+          aws-region: us-east-1
+
+      - name: Upload to S3
+        run: aws s3 cp ${{github.sha}}.zip s3://${{env.BUCKET}}/${{github.sha}}.zip
+
+  test:
+    runs-on: ubuntu-latest
+    needs: upload
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{secrets.AWS_ACCESS_KEY_ID}}
+          aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+          aws-region: us-east-1
+
+      - name: Create test function
+        run: |
+          aws lambda create-function --function-name test-function \
+            --code S3Bucket=${{env.BUCKET}},S3Key=${{github.sha}}.zip \
+            --handler lambda_function.lambda_handler \
+            --runtime python3.8 \
+            --role arn:aws:iam::${{secrets.AWS_ACCOUNT_ID}}:role/my-lambda-role
+
+      - name: Wait 30 seconds
+        run: sleep 30
+
+      - name: Destroy test function
+        if: ${{always()}}
+        run: aws lambda delete-function --function-name test-function
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{secrets.AWS_ACCESS_KEY_ID}}
+          aws-secret-access-key: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+          aws-region: us-east-1
+
+      - name: Delete lambda function
+#       continue-on-error: true <--- Could do this instead of the "|| true" on the following command
+        run: |
+          aws lambda delete-function --function-name my-function || true
+
+      - name: Create lambda function
+        run: |
+          aws lambda create-function --function-name my-function \
+            --code S3Bucket=${{env.BUCKET}},S3Key=${{github.sha}}.zip \
+            --handler lambda_function.lambda_handler \
+            --runtime python3.8 \
+            --role arn:aws:iam::${{secrets.AWS_ACCOUNT_ID}}:role/my-lambda-role
+```
