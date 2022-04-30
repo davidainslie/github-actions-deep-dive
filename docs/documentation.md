@@ -60,3 +60,11 @@ docs:
 
 Once run on GHA, go to `settings > pages`.
 Then under `Source` select branch `gh-pages` and save where you will see the banner `Your site is published at https://.....`.
+
+We can make sure documentation is kept up to date per release, by altering the workflow's `on push` e.g.
+```yaml
+on:
+  push:
+    paths:
+      - userguide.md
+```
